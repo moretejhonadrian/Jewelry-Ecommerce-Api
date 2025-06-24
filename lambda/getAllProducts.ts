@@ -1,12 +1,13 @@
+import { APIGatewayProxyHandler } from 'aws-lambda';
 import * as AWS from 'aws-sdk';
 import { decrypt } from '../utils/aes';
 
 const table = process.env.DYNAMODB_TABLE!;
 const dynamoDb = new AWS.DynamoDB.DocumentClient();
 
-export const getAllProducts = async (event: any) => {
+export const handler: APIGatewayProxyHandler = async (event) => {
     //handle pagination
-    const limit = parseInt(event.queryStringParameters?.limit || '5');
+    const limit = parseInt(event.queryStringParameters?.limit || '10');
     const startKey = event.queryStringParameters?.startKey
         ? JSON.parse(Buffer.from(event.queryStringParameters.startKey, 'base64').toString('utf-8'))
         : undefined;

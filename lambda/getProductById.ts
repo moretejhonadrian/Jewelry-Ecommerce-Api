@@ -1,10 +1,11 @@
+import { APIGatewayProxyHandler } from 'aws-lambda';
 import * as AWS from 'aws-sdk';
 import { decrypt } from '../utils/aes';
 
 const table = process.env.DYNAMODB_TABLE!;
 const dynamoDb = new AWS.DynamoDB.DocumentClient();
 
-export const getProductById = async (event: any) => {
+export const handler: APIGatewayProxyHandler = async (event) => {
     const id = event.pathParameters?.id;
     
     if (!id) {

@@ -1,9 +1,10 @@
+import { APIGatewayProxyHandler } from 'aws-lambda';
 import { DynamoDB } from 'aws-sdk';
 
 const dynamoDb = new DynamoDB.DocumentClient();
 const table = process.env.DYNAMODB_TABLE!;
 
-export const deleteProduct = async (event: any) => {
+export const handler: APIGatewayProxyHandler = async (event) => {
     const id = event.pathParameters?.id;
 
     if (!id) {

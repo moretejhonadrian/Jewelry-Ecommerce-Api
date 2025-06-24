@@ -1,23 +1,25 @@
+import { APIGatewayProxyHandler } from 'aws-lambda';
 import * as AWS from 'aws-sdk';
 import { v4 as uuidv4 } from 'uuid';
 import { encrypt } from '../utils/aes';
+import { z } from 'zod';
 
 const table = process.env.DYNAMODB_TABLE!;
 const dynamoDb = new AWS.DynamoDB.DocumentClient();
 
-interface CreateProductRequest {
-  productName: string;
-  price: number;
-  category: string;
-  imageUrl: string;
-  description: string;
-  features: string[];
-}
+const CreateProductSchema = z.object({
+  productName: z.string(),
+  price: z.number(),
+  category: z.string(),
+  imageUrl: z.string(),
+  description: z.string(),
+  features: z.array(z.string()),
+});
 
-export const createProduct = async (event: any) => {
+export const handler: APIGatewayProxyHandler = async (event) =>  {
   try {
-    const body: CreateProductRequest = JSON.parse(event.body || '{}');
-    const { productName, price, category, imageUrl, description, features } = body;
+    const parsed = CreateProductSchema.parse(JSON.parse(event.body || '{}'));
+    const { productName, price, category, imageUrl, description, features } = parsed;
     const id = uuidv4();
 
     const params = {
@@ -61,7 +63,7 @@ export const createProduct = async (event: any) => {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': '*',
       },
-      body: JSON.stringify({ error: 'Error creating product', details: (err as Error).message }),
+      body: JSON.stringify({ error: 'Error creating product. One or more fields may be invalid.', details: (err as Error).message }),
     };
   }
 }

@@ -54,7 +54,7 @@ export class JhonAdrianMoreteJewelryECommerceStack extends cdk.Stack {
     //CREATE request lambda
     const createProductLambda = new lambda.NodejsFunction(this, 'CreateProductRequest', {
       entry: 'lambda/createProduct.ts',
-      handler: 'createProduct',
+      handler: 'handler',
       environment: {
         DYNAMODB_TABLE: table.tableName,
         AES_SECRET_KEY: process.env.AES_SECRET_KEY!,
@@ -65,7 +65,7 @@ export class JhonAdrianMoreteJewelryECommerceStack extends cdk.Stack {
     //READ request lambda (get all)
     const getAllProductsLambda = new lambda.NodejsFunction(this, 'GetAllProductsRequest', {
       entry: 'lambda/getAllProducts.ts',
-      handler: 'getAllProducts',
+      handler: 'handler',
       environment: {
         DYNAMODB_TABLE: table.tableName,
         AES_SECRET_KEY: process.env.AES_SECRET_KEY!,
@@ -76,7 +76,7 @@ export class JhonAdrianMoreteJewelryECommerceStack extends cdk.Stack {
     //READ request lambda (get id)
     const getProductByIdLambda = new lambda.NodejsFunction(this, 'GetProductByIdRequest', {
       entry: 'lambda/getProductById.ts',
-      handler: 'getProductById',
+      handler: 'handler',
       environment: {
         DYNAMODB_TABLE: table.tableName,
         AES_SECRET_KEY: process.env.AES_SECRET_KEY!,
@@ -87,7 +87,7 @@ export class JhonAdrianMoreteJewelryECommerceStack extends cdk.Stack {
     //UPDATE request lambda
     const updateProductLambda = new lambda.NodejsFunction(this, 'UpdateProductRequest', {
       entry: 'lambda/updateProduct.ts',
-      handler: 'updateProduct',
+      handler: 'handler',
       environment: {
         DYNAMODB_TABLE: table.tableName,
         AES_SECRET_KEY: process.env.AES_SECRET_KEY!,
@@ -98,7 +98,7 @@ export class JhonAdrianMoreteJewelryECommerceStack extends cdk.Stack {
     //DELETE request 
     const deleteProductLambda = new lambda.NodejsFunction(this, 'DeleteProductRequest', {
       entry: 'lambda/deleteProduct.ts',
-      handler: 'deleteProduct',
+      handler: 'handler',
       environment: {
         DYNAMODB_TABLE: table.tableName,
         AES_SECRET_KEY: process.env.AES_SECRET_KEY!,
