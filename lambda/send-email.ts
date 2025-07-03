@@ -20,11 +20,18 @@ export const handler = async (event: any) => {
     Message: {
       Body: {
         Text: {
-          Data: `You have a new purchase order for product ${productId} with quantity ${amount}.`,
+          Data: `Dear Supplier,
+
+We would like to place a new purchase order for the following item:
+
+- Product ID: ${productId}
+- Quantity: ${amount}
+
+Please confirm receipt of this order and provide an estimated delivery timeline at your earliest convenience.`,
         },
       },
       Subject: {
-        Data: 'New Purchase Order',
+        Data: 'Purchase Order Request',
       },
     },
     Source: 'jhoe.h@strastan.com',

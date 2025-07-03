@@ -1,24 +1,16 @@
-// lambda/approval/index.ts
-import { DynamoDB } from 'aws-sdk';
-
-const db = new DynamoDB.DocumentClient();
-
 export const handler = async (event: any) => {
-  console.log("Received task token for approval callback:", JSON.stringify(event, null, 2));
+  console.log("Approval Lambda received event:", JSON.stringify(event, null, 2));
 
-  const { token, input } = event;
+  // Simulated approval logic – replace with actual logic as needed
+  const approved = true; // Set to false to simulate rejection
 
-  // Store the token and context somewhere — e.g., DynamoDB
-  await db.put({
-    TableName: process.env.APPROVAL_TABLE!,
-    Item: {
-      id: input.purchaseOrderId,
-      taskToken: token,
-      status: 'PENDING',
-      email: input.email,
-      timestamp: new Date().toISOString(),
-    },
-  }).promise();
-
-  return { status: 'Waiting for approval' };
+  return {
+    approvalStatus: approved ? 'APPROVED' : 'REJECTED',
+    reason: approved ? 'Auto-approved for testing' : 'Auto-rejected for testing',
+    originalRequest: {
+      productId: event.productId,
+      amount: event.amount,
+      email: event.email
+    }
+  };
 };

@@ -181,7 +181,8 @@ export class JhonAdrianMoreteJewelryECommerceStack extends cdk.Stack {
     // 2. DynamoDB Inventory Table
     const inventoryTable = new dynamodb.Table(this, 'InventoryTable', {
       partitionKey: { name: 'productId', type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST
+      tableName: process.env.INVENTORY_TABLE,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // For dev only!
     });
 
     // 3. Lambda: Send email
@@ -199,60 +200,46 @@ export class JhonAdrianMoreteJewelryECommerceStack extends cdk.Stack {
       resources: ['*'],
     }));
 
-    const approvalLambda = new lambda.Function(this, 'WaitForApprovalLambda', {
+    const approvalLambda = new NodejsFunction(this, 'WaitForApprovalLambda', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      code: lambda.Code.fromInline(`
-        exports.handler = async (event) => {
-          console.log("Approval callback simulated", event);
-          return { approvalStatus: "APPROVED" };
-        }
-      `),
-      handler: 'index.handler',
+      entry: path.join(__dirname, '../lambda/approval.ts'), 
+      handler: 'handler',
+      environment: {
+        AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
+      }
     });
 
-    // 5. Lambda: Update inventory
-    const updateInventoryLambda = new lambda.Function(this, 'UpdateInventoryLambda', {
+    const updateInventoryLambda = new NodejsFunction(this, 'UpdateInventoryLambda', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      code: lambda.Code.fromInline(`
-        const AWS = require('aws-sdk');
-        const ddb = new AWS.DynamoDB.DocumentClient();
-        exports.handler = async (event) => {
-          const { productId, amount } = event;
-          await ddb.update({
-            TableName: process.env.TABLE_NAME,
-            Key: { productId },
-            UpdateExpression: "ADD stock :amount SET status = :status",
-            ExpressionAttributeValues: {
-              ":amount": amount,
-              ":status": "IN STOCK"
-            }
-          }).promise();
-          return { updated: true };
-        }
-      `),
-      handler: 'index.handler',
+      entry: path.join(__dirname, '../lambda/updateInventory.ts'), 
+      handler: 'handler',
       environment: {
-        TABLE_NAME: inventoryTable.tableName
+        AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
+        INVENTORY_TABLE: inventoryTable.tableName,
       }
     });
     inventoryTable.grantWriteData(updateInventoryLambda);
 
     // 6. Step Function Definition
+    // Step Function Definition with proper payload handling
     const definition = new tasks.LambdaInvoke(this, 'Send PO Email', {
       lambdaFunction: emailLambda,
-      outputPath: '$.Payload'
+      resultPath: '$.emailResult' // store the email result without removing original input
     })
-      .next(new tasks.LambdaInvoke(this, 'Wait for Approval Callback', {
-        lambdaFunction: approvalLambda,
-        outputPath: '$.Payload'
-      }))
-      .next(new stepfunctions.Choice(this, 'Approved?')
-        .when(stepfunctions.Condition.stringEquals('$.approvalStatus', 'APPROVED'),
-          new tasks.LambdaInvoke(this, 'Update Inventory', {
-            lambdaFunction: updateInventoryLambda
-          })
-        )
-        .otherwise(new stepfunctions.Fail(this, 'Rejected')));
+    .next(new tasks.LambdaInvoke(this, 'Wait for Approval Callback', {
+      lambdaFunction: approvalLambda,
+      resultPath: '$.approvalResult' // store approval result
+    }))
+    .next(new stepfunctions.Choice(this, 'Approved?')
+      .when(
+        stepfunctions.Condition.stringEquals('$.approvalResult.Payload.approvalStatus', 'APPROVED'),
+        new tasks.LambdaInvoke(this, 'Update Inventory', {
+          lambdaFunction: updateInventoryLambda,
+          resultPath: '$.updateResult' // optional: capture result if needed
+        })
+      )
+      .otherwise(new stepfunctions.Fail(this, 'Rejected'))
+    );
 
     const poStateMachine = new stepfunctions.StateMachine(this, 'CreatePurchaseOrderWorkflow', {
       definition,
