@@ -1,8 +1,6 @@
-// lambdas/inventoryManagementService/approval.ts
-
 import { Handler } from 'aws-lambda';
 import { DynamoDB } from 'aws-sdk';
-import { v4 as uuidv4 } from 'uuid'; // Optional, for generating unique order IDs
+import { v4 as uuidv4 } from 'uuid';
 
 const dynamoDb = new DynamoDB.DocumentClient();
 const tableName = process.env.PURCHASE_ORDER_TABLE!;
@@ -14,18 +12,41 @@ if (!tableName) {
 export const handler: Handler = async (event) => {
   console.log("Approval request received:", JSON.stringify(event, null, 2));
 
-  //const taskToken = event.taskToken;
   const input = event.detail;
 
+  const productIds: string[] = input?.productIds || [];
+  const productNames: string[] = input?.productNames || [];
+  const quantities: number[] = input?.quantities || [];
+  const purchasePrices: number[] = input?.purchasePrices || [];
+  const email: string = input?.email;
+
+  if (!email) {
+    throw new Error("Missing 'email' field in the input.");
+  }
+
+  if (
+    !Array.isArray(productIds) ||
+    !Array.isArray(productNames) ||
+    !Array.isArray(quantities) ||
+    !Array.isArray(purchasePrices) ||
+    productIds.length !== productNames.length ||
+    productNames.length !== quantities.length ||
+    quantities.length !== purchasePrices.length
+  ) {
+    throw new Error("Mismatch or invalid format in productIds, productNames, quantities, or purchasePrices arrays.");
+  }
+
   const orderItem = {
-    orderId: uuidv4(), // Unique ID for the order
-    email: input.email,
-    amount: input.amount,
-    productId: input.productId,
+    orderId: uuidv4(),
+    email,
+    productIds,
+    productNames,
+    quantities,
+    purchasePrices,
     status: 'PENDING',
     orderDate: new Date().toISOString(),
     responseDate: 'PENDING',
-    //taskToken, // Useful if using Step Functions for manual approval
+    // taskToken: event.taskToken, 
   };
 
   try {
