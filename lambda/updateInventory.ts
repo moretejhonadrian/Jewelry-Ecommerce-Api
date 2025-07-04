@@ -12,49 +12,21 @@ export const handler = async (event: any) => {
   console.log("UpdateInventory Lambda received event:", JSON.stringify(event, null, 2));
 
   const orderId = event.detail?.orderId;
-  const productIds: string[] = event.detail?.productIds || event.detail?.approvedProductIds;
-  const productNames: string[] = event.detail?.productNames || [];
-  const quantities: number[] = event.detail?.quantities || [];
-  const purchasePrices: number[] = event.detail?.purchasePrices || [];
-  const approvalStatus = event.approvalStatus ?? event.detail?.approvalStatus;
+  const productId = event.detail?.productId;
+  const quantity = event.detail?.quantity;
+  const approvalStatus = event.detail?.approvalStatus;
+  const productName = event.detail?.productName;
+
+  if (!orderId || !productId || typeof quantity !== 'number' || !approvalStatus) {
+    throw new Error("Missing or invalid 'orderId', 'productId', 'quantity', or 'approvalStatus'");
+  }
 
   const now = new Date().toISOString();
 
-  if (!orderId || !approvalStatus) {
-    throw new Error("Missing 'orderId' or 'approvalStatus'.");
-  }
-
-  //  Check if the order exists first
-  const existingOrder = await dynamoDb.get({
-    TableName: ordersTable,
-    Key: { orderId },
-  }).promise();
-
-  if (!existingOrder.Item) {
-    console.warn(`Order ${orderId} not found. Skipping inventory update.`);
-    return {
-      status: 'SKIPPED',
-      message: `Order ${orderId} not found. No action taken.`,
-    };
-  }
-
-  //  Validate array shapes
-  if (
-    !Array.isArray(productIds) ||
-    !Array.isArray(productNames) ||
-    !Array.isArray(quantities) ||
-    !Array.isArray(purchasePrices) ||
-    productIds.length !== productNames.length ||
-    productNames.length !== quantities.length ||
-    quantities.length !== purchasePrices.length
-  ) {
-    throw new Error("Invalid or mismatched productIds, productNames, quantities, and purchasePrices arrays.");
-  }
-
-  //  Skip if not approved
   if (approvalStatus !== 'APPROVED') {
     console.log(`Order ${orderId} was not approved. Skipping inventory update.`);
-
+    
+    // Optionally mark the order as "denied & inventory unchanged"
     await dynamoDb.update({
       TableName: ordersTable,
       Key: { orderId },
@@ -62,7 +34,7 @@ export const handler = async (event: any) => {
       ExpressionAttributeValues: {
         ':updated': false,
         ':now': now,
-      },
+      }
     }).promise();
 
     return {
@@ -71,32 +43,24 @@ export const handler = async (event: any) => {
     };
   }
 
-  //  Proceed with inventory update
+  // Update inventory if approved
   try {
-    const updates = productIds.map((productId, i) => {
-      const quantity = quantities[i];
-      const purchasePrice = purchasePrices[i];
-      const productName = productNames[i];
+    const inventoryResult = await dynamoDb.update({
+      TableName: inventoryTable,
+      Key: { productId },
+      UpdateExpression: 'SET stock = if_not_exists(stock, :zero) + :quantity, lastUpdated = :now, productName = if_not_exists(productName, :productName)',
+      ExpressionAttributeValues: {
+        ':quantity': quantity,
+        ':zero': 0,
+        ':now': now,
+        ':productName': productName,
+      },
+      ReturnValues: 'UPDATED_NEW',
+    }).promise();
 
-      console.log(`Updating product ${productId} with quantity ${quantity} and price ${purchasePrice}`);
+    console.log("Inventory updated:", inventoryResult);
 
-      return dynamoDb.update({
-        TableName: inventoryTable,
-        Key: { productId },
-        UpdateExpression: 'SET stock = if_not_exists(stock, :zero) + :amount, lastUpdated = :now, purchasePrice = :purchasePrice, productName = if_not_exists(productName, :productName)',
-        ExpressionAttributeValues: {
-          ':amount': quantity,
-          ':zero': 0,
-          ':now': now,
-          ':purchasePrice': purchasePrice,
-          ':productName' : productName,
-        },
-        ReturnValues: 'UPDATED_NEW',
-      }).promise();
-    });
-
-    const inventoryResults = await Promise.all(updates);
-
+    // Mark the order as updated
     await dynamoDb.update({
       TableName: ordersTable,
       Key: { orderId },
@@ -110,10 +74,8 @@ export const handler = async (event: any) => {
     return {
       status: 'INVENTORY_UPDATED',
       orderId,
-      updatedItems: inventoryResults.map((res, i) => ({
-        productId: productIds[i],
-        newStock: res.Attributes?.stock,
-      })),
+      productId,
+      updatedStock: inventoryResult.Attributes,
     };
   } catch (error) {
     console.error("Failed to update inventory:", error);

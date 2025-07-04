@@ -137,4 +137,41 @@ export function createPurchaseOrderFlow(stack: Stack, eventBus: EventBus) {
       new targets.SfnStateMachine(updateApprovedOrder),
     ],
   });
+
+  //try to invoke an event inside an event
+    const callPurchaseEventLambda = new NodejsFunction(stack, 'callPurchaseEventLambda', {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      //entry: path.join(__dirname, '../../lambdas/inventoryManagementService/sendEmail.ts'),
+      entry: path.join(__dirname, '../../lambda/callPurchaseEvent.ts'),
+      handler: 'handler',
+      environment: {
+        AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
+      },
+    });
+
+    callPurchaseEventLambda.addToRolePolicy(new iam.PolicyStatement({
+      actions: ['*'],
+      resources: ['*']
+    }));
+
+    const callPurchaseDefinition = new tasks.LambdaInvoke(stack, 'Call Purchase Event', {
+      lambdaFunction: callPurchaseEventLambda,
+      resultPath: '$.callPurchaseResult',
+    })
+
+    const callPurchaseOrder = new stepfunctions.StateMachine(stack, 'CallPurchaseOrder', {
+      definition: callPurchaseDefinition,
+    });
+
+    // EventBridge rule to start Step Function
+    new events.Rule(stack, 'CallPurchaseOrderRule', {
+      eventBus,
+      eventPattern: {
+        source: ['callpurchase.orders'],
+        detailType: ['call-create-purchase-order'],
+      },
+      targets: [
+        new targets.SfnStateMachine(callPurchaseOrder),
+      ],
+    });
 }
