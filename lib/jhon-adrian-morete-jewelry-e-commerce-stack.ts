@@ -2,25 +2,11 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
-//import * as lambda from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as events from 'aws-cdk-lib/aws-events';
 import * as dotenv from 'dotenv';
-
-
-import * as sqs from 'aws-cdk-lib/aws-sqs';
-import * as targets from 'aws-cdk-lib/aws-events-targets';
-import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
-import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
-import * as path from 'path';
-
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import { getExistingLogGroup } from './utils/logGroups';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
-import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
-
+import { createPurchaseOrderFlow } from './inventoryManagementServices/create-purchase-order-workflow'
+import * as events from 'aws-cdk-lib/aws-events';
 
 dotenv.config();
 
@@ -172,90 +158,10 @@ export class JhonAdrianMoreteJewelryECommerceStack extends cdk.Stack {
       authorizationType: apigateway.AuthorizationType.COGNITO,
     });
 
-    //INVENTORYYYY
-    // 1. EventBus
-    const eventBus = new events.EventBus(this, 'PurchaseOrderEventBus', {
-      eventBusName: 'PurchaseOrderEventBus'
+    const InventoryEventBus = new events.EventBus(this, 'InventoryEventBus', {
+      eventBusName: 'inventory-event-bus',
     });
 
-    // 2. DynamoDB Inventory Table
-    const inventoryTable = new dynamodb.Table(this, 'InventoryTable', {
-      partitionKey: { name: 'productId', type: dynamodb.AttributeType.STRING },
-      tableName: process.env.INVENTORY_TABLE,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // For dev only!
-    });
-
-    // 3. Lambda: Send email
-    const emailLambda = new NodejsFunction(this, 'SendEmailLambda', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      entry: path.join(__dirname, '../lambda/send-email.ts'), 
-      handler: 'handler',
-      environment: {
-        AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
-      }
-    });
-
-    emailLambda.addToRolePolicy(new iam.PolicyStatement({
-      actions: ['ses:SendEmail'],
-      resources: ['*'],
-    }));
-
-    const approvalLambda = new NodejsFunction(this, 'WaitForApprovalLambda', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      entry: path.join(__dirname, '../lambda/approval.ts'), 
-      handler: 'handler',
-      environment: {
-        AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
-      }
-    });
-
-    const updateInventoryLambda = new NodejsFunction(this, 'UpdateInventoryLambda', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      entry: path.join(__dirname, '../lambda/updateInventory.ts'), 
-      handler: 'handler',
-      environment: {
-        AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
-        INVENTORY_TABLE: inventoryTable.tableName,
-      }
-    });
-    inventoryTable.grantWriteData(updateInventoryLambda);
-
-    // 6. Step Function Definition
-    // Step Function Definition with proper payload handling
-    const definition = new tasks.LambdaInvoke(this, 'Send PO Email', {
-      lambdaFunction: emailLambda,
-      resultPath: '$.emailResult' // store the email result without removing original input
-    })
-    .next(new tasks.LambdaInvoke(this, 'Wait for Approval Callback', {
-      lambdaFunction: approvalLambda,
-      resultPath: '$.approvalResult' // store approval result
-    }))
-    .next(new stepfunctions.Choice(this, 'Approved?')
-      .when(
-        stepfunctions.Condition.stringEquals('$.approvalResult.Payload.approvalStatus', 'APPROVED'),
-        new tasks.LambdaInvoke(this, 'Update Inventory', {
-          lambdaFunction: updateInventoryLambda,
-          resultPath: '$.updateResult' // optional: capture result if needed
-        })
-      )
-      .otherwise(new stepfunctions.Fail(this, 'Rejected'))
-    );
-
-    const poStateMachine = new stepfunctions.StateMachine(this, 'CreatePurchaseOrderWorkflow', {
-      definition,
-      timeout: cdk.Duration.minutes(5)
-    });
-
-    // 7. EventBridge Rule to trigger Step Function
-    new events.Rule(this, 'CreatePurchaseOrderRule', {
-      eventBus,
-      eventPattern: {
-        source: ['purchase.orders'],
-        detailType: ['create-purchase-order']
-      },
-      targets: [
-        new targets.SfnStateMachine(poStateMachine)
-      ]
-    });
+    createPurchaseOrderFlow(this, InventoryEventBus);
   }
 }

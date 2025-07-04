@@ -45,4 +45,6 @@ Please confirm receipt of this order and provide an estimated delivery timeline 
     console.error('Failed to send email:', error);
     throw error;
   }
+
+  //return { status: 'EMAIL_SENT'};
 };

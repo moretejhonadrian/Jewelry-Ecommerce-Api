@@ -1,43 +1,79 @@
 import { DynamoDB } from 'aws-sdk';
 
 const dynamoDb = new DynamoDB.DocumentClient();
-const tableName = process.env.INVENTORY_TABLE!;
+const inventoryTable = process.env.INVENTORY_TABLE!;
+const ordersTable = process.env.PURCHASE_ORDER_TABLE!;
 
-if (!tableName) {
-  throw new Error("Missing INVENTORY_TABLE environment variable");
+if (!inventoryTable || !ordersTable) {
+  throw new Error("Missing INVENTORY_TABLE or PURCHASE_ORDER_TABLE environment variable");
 }
 
 export const handler = async (event: any) => {
   console.log("UpdateInventory Lambda received event:", JSON.stringify(event, null, 2));
 
-  const productId = event.productId ?? event.detail?.productId;
+  const orderId = event.orderId ?? event.detail?.orderId;
+  const productId = event.approvedProductId ?? event.detail?.approvedProductId;
   const amount = event.amount ?? event.detail?.amount;
+  const approvalStatus = event.approvalStatus ?? event.detail?.approvalStatus;
 
-  if (!productId || typeof amount !== 'number') {
-    throw new Error("Missing or invalid 'productId' or 'amount' in the event");
+  if (!orderId || !productId || typeof amount !== 'number' || !approvalStatus) {
+    throw new Error("Missing or invalid 'orderId', 'productId', 'amount', or 'approvalStatus'");
   }
 
   const now = new Date().toISOString();
 
-  const params: DynamoDB.DocumentClient.UpdateItemInput = {
-    TableName: tableName,
-    Key: { productId },
-    UpdateExpression: 'SET stock = if_not_exists(stock, :zero) + :amount, lastUpdated = :updatedAt',
-    ConditionExpression: 'stock >= :amount OR attribute_not_exists(stock)', // optional: skip check if new
-    ExpressionAttributeValues: {
-      ':amount': amount,
-      ':zero': 0,
-      ':updatedAt': now
-    },
-    ReturnValues: 'UPDATED_NEW'
-  };
+  if (approvalStatus !== 'APPROVED') {
+    console.log(`Order ${orderId} was not approved. Skipping inventory update.`);
+    
+    // Optionally mark the order as "denied & inventory unchanged"
+    await dynamoDb.update({
+      TableName: ordersTable,
+      Key: { orderId },
+      UpdateExpression: 'SET inventoryUpdated = :updated, responseDate = :now',
+      ExpressionAttributeValues: {
+        ':updated': false,
+        ':now': now,
+      }
+    }).promise();
 
+    return {
+      status: 'SKIPPED',
+      message: `Inventory update skipped for denied order ${orderId}`,
+    };
+  }
+
+  // Update inventory if approved
   try {
-    const result = await dynamoDb.update(params).promise();
-    console.log("Inventory updated:", result);
+    const inventoryResult = await dynamoDb.update({
+      TableName: inventoryTable,
+      Key: { productId },
+      UpdateExpression: 'SET stock = if_not_exists(stock, :zero) + :amount, lastUpdated = :now',
+      ExpressionAttributeValues: {
+        ':amount': amount,
+        ':zero': 0,
+        ':now': now,
+      },
+      ReturnValues: 'UPDATED_NEW',
+    }).promise();
+
+    console.log("Inventory updated:", inventoryResult);
+
+    // Mark the order as updated
+    await dynamoDb.update({
+      TableName: ordersTable,
+      Key: { orderId },
+      UpdateExpression: 'SET inventoryUpdated = :updated, responseDate = :now',
+      ExpressionAttributeValues: {
+        ':updated': true,
+        ':now': now,
+      },
+    }).promise();
+
     return {
       status: 'INVENTORY_UPDATED',
-      updated: result.Attributes
+      orderId,
+      productId,
+      updatedStock: inventoryResult.Attributes,
     };
   } catch (error) {
     console.error("Failed to update inventory:", error);
