@@ -4,9 +4,10 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dotenv from 'dotenv';
-import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
-import { createPurchaseOrderFlow } from './inventoryManagementServices/create-purchase-order-workflow'
 import * as events from 'aws-cdk-lib/aws-events';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
+import { createPurchase } from './inventoryManagementServices/create-purchase-order'
+import { sendStockUnavailable } from './inventoryManagementServices/send-stock-unavailable'
 
 dotenv.config();
 
@@ -162,6 +163,7 @@ export class JhonAdrianMoreteJewelryECommerceStack extends cdk.Stack {
       eventBusName: 'inventory-event-bus',
     });
 
-    createPurchaseOrderFlow(this, InventoryEventBus);
+    createPurchase(this, InventoryEventBus);
+    sendStockUnavailable(this, InventoryEventBus);
   }
 }

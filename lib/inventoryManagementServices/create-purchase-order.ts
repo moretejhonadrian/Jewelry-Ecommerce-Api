@@ -7,14 +7,15 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as path from 'path';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
-import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
+import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
+import { Duration } from 'aws-cdk-lib';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import { EventBus } from 'aws-cdk-lib/aws-events';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-export function createPurchaseOrderFlow(stack: Stack, eventBus: EventBus) {
+export function createPurchase(stack: Stack, eventBus: EventBus) {
   
   const inventoryTable = new dynamodb.Table(stack, 'InventoryTable', {
     partitionKey: { name: 'productId', type: dynamodb.AttributeType.STRING },
@@ -97,8 +98,9 @@ export function createPurchaseOrderFlow(stack: Stack, eventBus: EventBus) {
     resultPath: '$.approvalResult',
   }));
 
-  const poStateMachine = new stepfunctions.StateMachine(stack, 'CreatePurchaseOrderWorkflow', {
-    definition: createPoDefinition,
+  const poStateMachine = new sfn.StateMachine(stack, 'CreatePurchaseOrderWorkflow', {
+    definitionBody: sfn.DefinitionBody.fromChainable(createPoDefinition),
+    timeout: Duration.minutes(5),
   });
 
   const updateOrderDefinition = new tasks.LambdaInvoke(stack, 'Get Callback', {
@@ -110,8 +112,9 @@ export function createPurchaseOrderFlow(stack: Stack, eventBus: EventBus) {
     resultPath: '$.updateResult',
   }));
 
-  const updateApprovedOrder = new stepfunctions.StateMachine(stack, 'UpdateApprovedOrder', {
-    definition: updateOrderDefinition,
+  const updateApprovedOrder = new sfn.StateMachine(stack, 'UpdateApprovedOrder', {
+    definitionBody: sfn.DefinitionBody.fromChainable(updateOrderDefinition),
+    timeout: Duration.minutes(5),
   });
 
   // EventBridge rule to start Step Function
@@ -159,8 +162,9 @@ export function createPurchaseOrderFlow(stack: Stack, eventBus: EventBus) {
       resultPath: '$.callPurchaseResult',
     })
 
-    const callPurchaseOrder = new stepfunctions.StateMachine(stack, 'CallPurchaseOrder', {
-      definition: callPurchaseDefinition,
+    const callPurchaseOrder = new sfn.StateMachine(stack, 'CallPurchaseOrder', {
+      definitionBody: sfn.DefinitionBody.fromChainable(callPurchaseDefinition),
+      timeout: Duration.minutes(5),
     });
 
     // EventBridge rule to start Step Function

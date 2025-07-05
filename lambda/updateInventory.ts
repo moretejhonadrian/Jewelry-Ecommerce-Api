@@ -15,7 +15,7 @@ export const handler = async (event: any) => {
   const productId = event.detail?.productId;
   const quantity = event.detail?.quantity;
   const approvalStatus = event.detail?.approvalStatus;
-  const productName = event.detail?.productName;
+  const productName = event.detail?.productName ?? "";
 
   if (!orderId || !productId || typeof quantity !== 'number' || !approvalStatus) {
     throw new Error("Missing or invalid 'orderId', 'productId', 'quantity', or 'approvalStatus'");

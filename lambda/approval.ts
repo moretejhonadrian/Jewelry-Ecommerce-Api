@@ -2,7 +2,7 @@
 
 import { Handler } from 'aws-lambda';
 import { DynamoDB } from 'aws-sdk';
-import { v4 as uuidv4 } from 'uuid'; // Optional, for generating unique order IDs
+import { v4 as uuidv4 } from 'uuid'; 
 
 const dynamoDb = new DynamoDB.DocumentClient();
 const tableName = process.env.PURCHASE_ORDER_TABLE!;
