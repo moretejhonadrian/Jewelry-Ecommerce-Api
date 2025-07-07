@@ -17,7 +17,7 @@ dotenv.config();
 
 export function sendStockUnavailable(stack: Stack, eventBus: EventBus) {
     const lowStockNotificationTable = new dynamodb.Table(stack, ' lowStockNotificationTable', {
-        partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+        partitionKey: { name: 'messageId', type: dynamodb.AttributeType.STRING },
         tableName: process.env.LOW_STOCK_NOTIFICATION_TABLE,
         removalPolicy: cdk.RemovalPolicy.DESTROY, // For dev only!
     });

@@ -6,9 +6,7 @@ export const handler: Handler = async (event) => {
     const params = {
         productId: "J-2003",
         productName: 'Silver Bracelet',
-        quantity: 29,
-        //purchasePrice: 23
-        email: 'moretejhonadrian@gmail.com'
+        stock: 1
     };
 
     await triggerPurchaseOrder(params); //WAIT

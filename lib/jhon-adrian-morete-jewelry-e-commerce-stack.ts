@@ -164,8 +164,6 @@ export class JhonAdrianMoreteJewelryECommerceStack extends cdk.Stack {
     });
 
     createPurchase(this, InventoryEventBus);
-    sendStockUnavailable(this, InventoryEventBus);
-
-    
+    //sendStockUnavailable(this, InventoryEventBus);
   }
 }

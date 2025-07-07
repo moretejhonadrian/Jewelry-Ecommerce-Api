@@ -3,14 +3,12 @@ import { EventBridgeClient, PutEventsCommand } from "@aws-sdk/client-eventbridge
 type details = {
   productId: string,
   productName: string,
-  quantity: number,
-  //purchasePrice: number
-  email: string,
+  stock: number,
 }
 
 export async function triggerPurchaseOrder(event: details) {
   try {
-    const { productId, productName, quantity, email } = event;
+    const { productId, productName, stock } = event;
 
     const client = new EventBridgeClient({ region: "ap-southeast-1" });
 
@@ -23,9 +21,7 @@ export async function triggerPurchaseOrder(event: details) {
           Detail: JSON.stringify({
             productId,
             productName,
-            quantity,
-            //purchasePrice
-            email
+            stock,
           }),
         },
       ],

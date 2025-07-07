@@ -24,19 +24,19 @@ export const handler = async (event: DynamoDBStreamEvent): Promise<void> => {
 
     if (!productId || !stockStr) continue;
     
-    const productName = newImage?.stock?.S!;
+    const productName = newImage?.productName?.S!;
 
     const stock = parseInt(stockStr);
 
     if (stock < LOW_STOCK_THRESHOLD) {
+      await updateStatus(productId, "LOW STOCK");
+      
       console.warn(`⚠️ LOW STOCK: Product ${productId} has only ${stock} left.`);
       //call purchase event
       const params = {
         productId,
         productName,
-        quantity: 31,
-        //purchasePrice: 23
-        email: 'moretejhonadrian@gmail.com'
+        stock, 
       };
 
       await triggerPurchaseOrder(params); //WAIT
@@ -46,24 +46,33 @@ export const handler = async (event: DynamoDBStreamEvent): Promise<void> => {
     } //if stock is zero, update the 
 
     if (stock == 0) {
-       // Update inventory if approved
-      try {
-        const inventoryResult = await dynamoDb.update({
-          TableName: inventoryTable,
-          Key: { productId },
-          UpdateExpression: 'SET productStatus = :productStatus',
-          ExpressionAttributeValues: {
-            ':productStatus': 'OUT OF STOCK'
-          },
-          ReturnValues: 'UPDATED_NEW',
-        }).promise();
+      // Update inventory if approved
+      await updateStatus(productId, "OUT OF STOCK");
+    }
 
-        console.log("Inventory updated:", inventoryResult);
-
-      } catch (error) {
-        console.error("Failed to update inventory:", error);
-        throw error;
-      }
+    //if stock is greater or equals to threshold
+    if (stock > LOW_STOCK_THRESHOLD) {
+      await updateStatus(productId, "IN STOCK");
     }
   }
 };
+
+async function updateStatus(productId: string, productStatus: string) {
+  try {
+      const inventoryResult = await dynamoDb.update({
+        TableName: inventoryTable,
+        Key: { productId },
+        UpdateExpression: 'SET productStatus = :productStatus',
+        ExpressionAttributeValues: {
+          ':productStatus': productStatus,
+        },
+        ReturnValues: 'UPDATED_NEW',
+      }).promise();
+
+      console.log("Inventory updated:", inventoryResult);
+
+    } catch (error) {
+      console.error("Failed to update inventory:", error);
+      throw error;
+    }
+}

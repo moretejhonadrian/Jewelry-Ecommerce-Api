@@ -25,6 +25,12 @@ export function createPurchase(stack: Stack, eventBus: EventBus) {
     removalPolicy: cdk.RemovalPolicy.DESTROY, // For dev only!
   });
 
+  const notificationTable = new dynamodb.Table(stack, ' notificationTable', {
+    partitionKey: { name: 'messageId', type: dynamodb.AttributeType.STRING },
+    tableName: process.env.NOTIFICATION_TABLE,
+    removalPolicy: cdk.RemovalPolicy.DESTROY, // For dev only!
+  });
+
   //store all the purchase requests waiting for approval
   const purchaseOrderTable = new dynamodb.Table(stack, 'PurchaseOrderTable', {
     partitionKey: { name: 'orderId', type: dynamodb.AttributeType.STRING },
@@ -32,18 +38,19 @@ export function createPurchase(stack: Stack, eventBus: EventBus) {
     removalPolicy: cdk.RemovalPolicy.DESTROY, // For dev only!
   });
 
-  const emailLambda = new NodejsFunction(stack, 'SendEmailLambda', {
+  const purchaseOrderNotif = new NodejsFunction(stack, 'PurchaseOrderNotif', {
     runtime: lambda.Runtime.NODEJS_22_X,
     //entry: path.join(__dirname, '../../lambdas/inventoryManagementService/sendEmail.ts'),
-    entry: path.join(__dirname, '../../lambda/sendEmail.ts'),
+    entry: path.join(__dirname, '../../lambda/purchaseOrderNotif.ts'),
     handler: 'handler',
     environment: {
       AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
+      NOTIFICATION_TABLE: notificationTable.tableName, 
     },
   });
 
-  emailLambda.addToRolePolicy(new iam.PolicyStatement({
-    actions: ['ses:SendEmail'],
+  purchaseOrderNotif.addToRolePolicy(new iam.PolicyStatement({
+    actions: ['*'],
     resources: ['*'],
   }));
 
@@ -66,7 +73,7 @@ export function createPurchase(stack: Stack, eventBus: EventBus) {
     handler: 'handler',
     environment: {
       AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
-      PURCHASE_ORDER_TABLE: purchaseOrderTable.tableName, 
+      NOTIFICATION_TABLE: notificationTable.tableName, 
     },
   });
   purchaseOrderTable.grantWriteData(approvalCallbackLambda);
@@ -92,13 +99,9 @@ export function createPurchase(stack: Stack, eventBus: EventBus) {
 
   // Step Function Definition
   const createPoDefinition = new tasks.LambdaInvoke(stack, 'Send PO Email', {
-    lambdaFunction: emailLambda,
-    resultPath: '$.emailResult',
+    lambdaFunction: purchaseOrderNotif,
+    resultPath: '$.purchaseMessageResult',
   })
-  .next(new tasks.LambdaInvoke(stack, 'Approval Request Logged', {
-    lambdaFunction: approvalLambda,
-    resultPath: '$.approvalResult',
-  }));
 
   const poStateMachine = new sfn.StateMachine(stack, 'CreatePurchaseOrderWorkflow', {
     definitionBody: sfn.DefinitionBody.fromChainable(createPoDefinition),
