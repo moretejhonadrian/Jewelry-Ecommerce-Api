@@ -11,6 +11,7 @@ import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import { Duration } from 'aws-cdk-lib';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import { EventBus } from 'aws-cdk-lib/aws-events';
+import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -20,6 +21,7 @@ export function createPurchase(stack: Stack, eventBus: EventBus) {
   const inventoryTable = new dynamodb.Table(stack, 'InventoryTable', {
     partitionKey: { name: 'productId', type: dynamodb.AttributeType.STRING },
     tableName: process.env.INVENTORY_TABLE,
+    stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES, // if needed
     removalPolicy: cdk.RemovalPolicy.DESTROY, // For dev only!
   });
 
@@ -178,4 +180,34 @@ export function createPurchase(stack: Stack, eventBus: EventBus) {
         new targets.SfnStateMachine(callPurchaseOrder),
       ],
     });
+
+  const inventoryStreamsLambda = new NodejsFunction(stack, 'InventoryStreamsLambda', {
+      entry: 'lambda/inventory-streams.ts',
+      handler: 'handler',
+      environment: {
+        INVENTORY_TABLE: inventoryTable.tableName,
+      },
+  });
+
+  inventoryStreamsLambda.addToRolePolicy(new iam.PolicyStatement({
+    actions: [
+      "dynamodb:DescribeStream",
+      "dynamodb:GetRecords",
+      "dynamodb:GetShardIterator",
+      "dynamodb:ListStreams",
+      "events:PutEvents",
+    ],
+    resources: [inventoryTable.tableStreamArn!, "arn:aws:events:ap-southeast-1:066926217034:event-bus/inventory-event-bus"], // ! ensures it's defined
+  }));
+
+  /*inventoryStreamsLambda.addEventSource(
+    new DynamoEventSource(inventoryTable, {
+      startingPosition: lambda.StartingPosition.LATEST,
+      batchSize: 1, // Optional: how many records per batch
+      retryAttempts: 2,
+    })
+  );*/
+
+  //inventoryTable.grantStreamRead(inventoryStreamsLambda);
+  inventoryTable.grantReadWriteData(inventoryStreamsLambda);
 }

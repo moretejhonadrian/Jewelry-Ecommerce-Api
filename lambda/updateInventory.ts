@@ -48,12 +48,13 @@ export const handler = async (event: any) => {
     const inventoryResult = await dynamoDb.update({
       TableName: inventoryTable,
       Key: { productId },
-      UpdateExpression: 'SET stock = if_not_exists(stock, :zero) + :quantity, lastUpdated = :now, productName = if_not_exists(productName, :productName)',
+      UpdateExpression: 'SET stock = if_not_exists(stock, :zero) + :quantity, lastUpdated = :now, productName = if_not_exists(productName, :productName), productStatus = :productStatus',
       ExpressionAttributeValues: {
         ':quantity': quantity,
         ':zero': 0,
         ':now': now,
         ':productName': productName,
+        ':productStatus': 'IN STOCK'
       },
       ReturnValues: 'UPDATED_NEW',
     }).promise();

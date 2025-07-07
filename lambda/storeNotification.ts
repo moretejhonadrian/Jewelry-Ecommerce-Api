@@ -6,7 +6,7 @@ const dynamoDb = new DynamoDB.DocumentClient();
 const tableName = process.env.LOW_STOCK_NOTIFICATION_TABLE!;
 
 if (!tableName) {
-  throw new Error("Missing PURCHASE_ORDER_TABLE environment variable");
+  throw new Error("Missing LOW_STOCK_NOTIFICATION_TABLE environment variable");
 }
 
 //storing the notification
